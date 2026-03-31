@@ -12,10 +12,51 @@ This project implements a **GPU-accelerated multi-modal deep learning pipeline**
 
 ## What it does
 
+Alzheimer's disease is notoriously difficult to catch early — by the time symptoms are obvious, significant neurological damage has already occurred. This project is my attempt to build a system that catches those early warning signs by combining two types of data that doctors already collect: brain MRI scans and clinical test results.
+The idea is simple: neither data source alone tells the full story. An MRI shows structural changes in the brain, while cognitive scores and biomarkers reveal functional decline. By training a model that understands both simultaneously — and how they relate to each other — we can build a more complete picture of a patient's risk.
+The model classifies patients into four groups: Cognitively Normal (CN), Early MCI, Late MCI, and Alzheimer's Disease (AD), and can explain why it made each prediction using SHAP plots and Grad-CAM heatmaps — which is crucial if clinicians are ever going to trust and use it.
+
+## What it does
+
 - Fuses **structural MRI brain scans** (3D volumes) with **clinical tabular data** (cognitive scores, biomarkers, demographics) into a unified representation using **NT-Xent contrastive learning** (SimCLR-style).
 - Classifies subjects into diagnostic groups: **CN** (Cognitively Normal), **EMCI** (Early MCI), **LMCI** (Late MCI), and **AD** (Alzheimer's Disease).
 - Produces an **ensemble of three models** — Fusion Model, XGBoost, and Shallow NN — for robust prediction.
 - Generates **SHAP feature importance** plots and **Grad-CAM MRI heatmaps** for clinical interpretability.
+
+## How it works
+
+At a high level, there are two separate encoders — one for MRI volumes, one for tabular clinical data — that are trained together using contrastive learning. The goal is to pull matching MRI+clinical pairs close together in a shared embedding space, while pushing non-matching pairs apart. Once trained, a classifier sits on top of those embeddings and makes the final diagnosis call.
+Three models then vote together as an ensemble: the main fusion model, an XGBoost classifier, and a lightweight neural network.
+
+```
+MRI NIfTI (.nii/.nii.gz)         Clinical CSV Data
+       │                                 │
+  [MRI Preprocessing]            [Feature Engineering]
+  N4 Bias Correction             KNN Imputation + Scaling
+  Skull Stripping                       │
+  MNI152 Registration                   │
+  GPU Resize → 64×64×64                 │
+       │                                 │
+  [3D CNN Encoder]               [MLP + Self-Attention]
+  4 Conv Blocks → GAP            256→128→Attention→128
+  → L2 Projection (128-d)        → L2 Projection (128-d)
+       │                                 │
+       └──────────┬──────────────────────┘
+                  │
+        [Cross-Modal Attention]
+         NT-Xent Contrastive Loss
+                  │
+          [Classifier Head]
+          256 → 128 → N_CLASSES
+                  │
+         ┌────────┼────────┐
+    [XGBoost]  [SNN]  [Fusion Model]
+         └────────┼────────┘
+              [Ensemble]
+                  │
+           Final Prediction
+           + SHAP + Grad-CAM
+```
 
 # Architecture
 
